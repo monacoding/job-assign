@@ -48,3 +48,26 @@ def init_database(db_path):
     conn.commit()
     # 데이터베이스 연결 종료
     conn.close()
+
+    # 이슈 추가 함수 정의
+def add_issue(title, description, assignee, status, db_path):
+    # 데이터베이스 연결 생성
+    conn = sqlite3.connect(db_path)
+    # 커서 객체 생성
+    cursor = conn.cursor()
+    
+    # 이슈 추가 쿼리 실행
+    cursor.execute('''
+        INSERT INTO issues (title, description, assignee, status)
+        VALUES (?, ?, ?, ?)
+    ''', (title, description, assignee, status))
+    
+    # 마지막으로 추가된 이슈의 ID 가져오기
+    issue_id = cursor.lastrowid
+    # 변경사항 커밋
+    conn.commit()
+    # 데이터베이스 연결 종료
+    conn.close()
+    
+    # 추가된 이슈의 ID 반환
+    return issue_id
