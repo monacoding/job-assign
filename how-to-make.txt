@@ -1,0 +1,262 @@
+이 가이드는 Python으로 GitHub Issues와 유사한 업무 관리 툴을 만드는 과정을 초보자도 따라갈 수 있도록 단계별로 설명합니다. GUI는 Tkinter를 사용하며, 팀원에게 작업을 할당할 때 이메일 알림을 보내는 기능을 포함합니다. 또한, GitHub를 통해 버전 관리를 하며 프로젝트를 체계적으로 관리할 수 있습니다.
+
+개발 단계
+
+1. 환경 설정
+
+Python이 설치되어 있는지 확인하세요. 추가 패키지는 필요 없으며, Tkinter는 기본적으로 포함됩니다.
+프로젝트 디렉토리를 만들고, 여기서 작업을 시작하세요.
+2. 데이터베이스 설계
+
+SQLite를 사용해 이슈, 코멘트, 팀원 정보를 저장합니다. 예를 들어, 이슈 테이블에는 제목, 설명, 담당자, 상태 등이 포함됩니다.
+데이터베이스 스키마는 다음과 같습니다:
+테이블	필드	설명
+issues	id, title, description, assignee, status, created_at, updated_at	이슈 정보 저장
+comments	id, issue_id, comment_text, author, created_at	이슈에 대한 코멘트 저장
+team_members	name, email	팀원 이름과 이메일 저장
+3. GUI 구현
+
+Tkinter를 사용해 메인 창을 만들고, 이슈 목록을 표시하는 리스트박스를 추가하세요.
+새 이슈 생성, 편집, 코멘트 추가를 위한 별도 창을 만들고, 각 창에 입력 필드와 버튼을 배치하세요.
+예를 들어, 새 이슈 창에는 제목, 설명, 담당자(드롭다운 목록), 상태(드롭다운 목록) 입력 필드가 필요합니다.
+4. 이메일 알림 기능
+
+smtplib을 사용해 이메일을 보냅니다. config.py 파일에 이메일 계정 정보(보내는 이메일 주소와 비밀번호)를 저장하세요.
+작업이 할당될 때, 담당자의 이메일로 이슈 제목과 설명을 포함한 알림 메일을 자동으로 보냅니다.
+5. GitHub로 버전 관리
+
+GitHub 계정을 만들고, 새 저장소를 생성하세요.
+프로젝트 디렉토리에서 git init으로 Git 저장소를 초기화하고, 파일을 추가한 후 git commit -m "Initial commit"으로 커밋하세요.
+GitHub 저장소와 연결하고, git push -u origin master로 코드를 업로드하세요.
+민감한 정보(config.py)는 .gitignore에 추가해 GitHub에 업로드되지 않도록 하세요.
+보고서: Python 기반 업무 관리 툴 개발 가이드
+
+이 보고서는 Python을 사용해 GitHub Issues와 유사한 업무 관리 툴을 개발하는 과정을 상세히 설명합니다. 특히, 초보자를 대상으로 GUI 기반 프로그램을 만들고, 팀원에게 작업 할당 시 이메일 알림을 보내는 기능을 포함하며, GitHub를 통해 버전 관리를 하는 방법을 다룹니다. 이 가이드는 단계별로 진행되며, 각 단계에서 필요한 코드와 설정을 포함합니다.
+
+1. 개발 환경 설정
+
+Python이 설치되어 있는지 확인하세요. 이 프로젝트에서는 추가 패키지 설치가 필요하지 않으며, Tkinter는 Python 표준 라이브러리에 포함되어 있어 GUI 개발에 적합합니다. 프로젝트 디렉토리를 만들고, 여기서 모든 파일을 관리하세요.
+
+2. 데이터베이스 설계 및 구현
+
+데이터를 저장하기 위해 SQLite를 사용합니다. 이 데이터베이스는 경량이며, 별도 서버 없이 파일 기반으로 작동합니다. 다음 테이블을 생성합니다:
+
+테이블	필드	설명
+issues	id, title, description, assignee, status, created_at, updated_at	이슈 정보 저장
+comments	id, issue_id, comment_text, author, created_at	이슈에 대한 코멘트 저장
+team_members	name, email	팀원 이름과 이메일 저장
+데이터베이스 초기화 함수는 다음과 같습니다:
+
+python
+
+
+
+import sqlite3
+
+def init_database(db_path):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS issues (
+            id INTEGER PRIMARY KEY,
+            title TEXT NOT NULL,
+            description TEXT,
+            assignee TEXT,
+            status TEXT,
+            created_at DATETIME DEFAULT CURRENT_DATE,
+            updated_at DATETIME DEFAULT CURRENT_DATE
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS comments (
+            id INTEGER PRIMARY KEY,
+            issue_id INTEGER,
+            comment_text TEXT,
+            author TEXT,
+            created_at DATETIME DEFAULT CURRENT_DATE,
+            FOREIGN KEY (issue_id) REFERENCES issues(id)
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS team_members (
+            name TEXT PRIMARY KEY,
+            email TEXT NOT NULL
+        )
+    ''')
+    conn.commit()
+    conn.close()
+이슈 추가, 조회, 업데이트 등의 함수도 필요하며, 예를 들어 addIssue 함수는 다음과 같습니다:
+
+python
+
+
+
+def addIssue(title, description, assignee, status, db_path):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO issues (title, description, assignee, status)
+        VALUES (?, ?, ?, ?)
+    ''', (title, description, assignee, status))
+    issue_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return issue_id
+3. GUI 구현
+
+Tkinter를 사용해 GUI를 구현합니다. 메인 창은 이슈 목록을 표시하며, 새 이슈 생성, 편집, 코멘트 추가를 위한 별도 창을 제공합니다. 예를 들어, 메인 창은 다음과 같이 구성됩니다:
+
+python
+
+
+
+import tkinter as tk
+from tkinter import messagebox
+
+class MainWindow:
+    def __init__(self, root, db_path):
+        self.root = root
+        self.db_path = db_path
+        self.issue_listbox = tk.Listbox(root)
+        self.issue_listbox.grid(row=0, column=0, columnspan=2)
+        self.issue_ids = []
+
+        create_button = tk.Button(root, text='Create New Issue', command=self.create_newIssue_window)
+        create_button.grid(row=1, column=0)
+        refresh_button = tk.Button(root, text='Refresh', command=self.populate_listbox)
+        refresh_button.grid(row=1, column=1)
+
+        self.populate_listbox()
+
+    def populate_listbox(self):
+        issues = getIssues(self.db_path)
+        self.issue_listbox.delete(0, tk.END)
+        self.issue_ids.clear()
+        for issue in issues:
+            issue_id, title, _, _, _, _, _ = issue
+            self.issue_listbox.insert(tk.END, title)
+            self.issue_ids.append(issue_id)
+새 이슈 창은 제목, 설명, 담당자, 상태 입력을 위한 필드를 포함하며, 담당자는 팀원 목록에서 선택할 수 있습니다. 예를 들어:
+
+python
+
+
+
+team_members = {
+    'John Doe': 'john.doe@example.com',
+    'Jane Smith': 'jane.smith@example.com'
+}
+
+def create_newIssue_window(self):
+    new_window = tk.Toplevel(self.root)
+    new_window.title('Create New Issue')
+
+    tk.Label(new_window, text='Title:').grid(row=0, column=0)
+    title_entry = tk.Entry(new_window)
+    title_entry.grid(row=0, column=1)
+    new_window.title_entry = title_entry
+
+    tk.Label(new_window, text='Description:').grid(row=1, column=0)
+    description_text = tk.Text(new_window, height=5)
+    description_text.grid(row=1, column=1)
+    new_window.description_text = description_text
+
+    tk.Label(new_window, text='Assignee:').grid(row=2, column=0)
+    assignee_var = tk.StringVar(new_window)
+    assignee_var.set('')
+    assignee_options = list(team_members.keys())
+    assignee_dropdown = tk.OptionMenu(new_window, assignee_var, *assignee_options)
+    assignee_dropdown.grid(row=2, column=1)
+    new_window.assignee_var = assignee_var
+
+    tk.Label(new_window, text='Status:').grid(row=3, column=0)
+    status_var = tk.StringVar(new_window)
+    status_var.set('Open')
+    status_options = ['Open', 'In Progress', 'Closed']
+    status_dropdown = tk.OptionMenu(new_window, status_var, *status_options)
+    status_dropdown.grid(row=3, column=1)
+    new_window.status_var = status_var
+
+    submit_button = tk.Button(new_window, text='Submit', command=lambda: self.submit_newIssue(new_window))
+    submit_button.grid(row=4, column=0, columnspan=2)
+4. 이메일 알림 기능
+
+이메일 알림은 smtplib을 사용해 구현됩니다. config.py 파일에 이메일 계정 정보를 저장하세요:
+
+python
+
+
+
+EMAIL_FROM = 'your_email@gmail.com'
+EMAIL_PASSWORD = 'your_password'
+이슈가 할당될 때, 담당자에게 알림 이메일을 보냅니다:
+
+python
+
+
+
+import smtplib
+from email.mime.text import MIMEText
+
+def send_email(subject, body, to_email, from_email, password):
+    msg = MIMEText(body)
+    msg['Subject'] = subject
+    msg['From'] = from_email
+    msg['To'] = to_email
+
+    server = smtplib.SMTP('smtp.gmail.com', 587)
+    server.starttls()
+    server.login(from_email, password)
+    server.sendmail(from_email, to_email, msg.as_string())
+    server.quit()
+
+def notify_assignee(issue_id, assignee, db_path):
+    if assignee not in team_members:
+        messagebox.showwarning('Warning', f'Assignee {assignee} not found in team members list. No email sent.')
+        return
+
+    to_email = team_members[assignee]
+    issue = getIssueById(issue_id, db_path)
+    if not issue:
+        messagebox.showerror('Error', f'Issue {issue_id} not found. No email sent.')
+        return
+
+    title = issue['title']
+    description = issue['description']
+    body = f'New issue assigned to you:\n\nTitle: {title}\nDescription: {description}\n\nPlease check the issue tracker for more details.'
+
+    try:
+        send_email('New Issue Assigned', body, to_email, config.EMAIL_FROM, config.EMAIL_PASSWORD)
+        messagebox.showinfo('Info', f'Email sent to {assignee}.')
+    except Exception as e:
+        messagebox.showerror('Error', f'Failed to send email: {str(e)}')
+5. GitHub로 버전 관리
+
+GitHub를 사용해 코드를 버전 관리하세요. 다음 단계를 따르세요:
+
+GitHub 계정을 만들고, 새 저장소를 생성하세요 (예: issue-tracker).
+프로젝트 디렉토리에서 다음 명령어를 실행하세요:
+git init
+git add .
+git commit -m "Initial commit"
+GitHub 저장소 URL을 복사하고, 다음 명령어로 연결하세요:
+git remote add origin https://github.com/your_username/issue-tracker
+git push -u origin master
+민감한 정보(config.py)는 .gitignore에 추가해 업로드되지 않도록 하세요:
+text
+
+
+
+config.py
+6. 테스트 및 확장
+
+main.py를 실행해 GUI를 테스트하세요. 이슈 생성, 편집, 코멘트 추가, 이메일 알림이 제대로 작동하는지 확인하세요.
+필요에 따라 기능을 확장할 수 있습니다. 예를 들어, 팀원 목록을 데이터베이스에서 관리하거나, 더 복잡한 GUI 레이아웃을 추가하세요.
+이 가이드는 초보자도 따라 할 수 있도록 설계되었으며, 단계별로 진행하면 성공적으로 업무 관리 툴을 개발할 수 있습니다. GitHub를 통해 코드를 관리하면 팀원과 협업하거나 나중에 참조할 수 있습니다.
+
+Key Citations
+
+Python Tkinter Official Documentation
+SQLite3 Python Library
+smtplib Python Library for Email
+Getting Started with GitHub Guide
